@@ -1,6 +1,7 @@
 package versioncache
 
 import (
+	"context"
 	"sync"
 )
 
@@ -60,7 +61,7 @@ func (c *VersionCache) Set(key string, value interface{}) {
 	o.value = value
 }
 
-func (c *VersionCache) Setter(key string) func(interface{}) {
+func (c *VersionCache) Setter(ctx context.Context, key string) func(interface{}) {
 	c.RLock()
 	o, ok := c.objects[key]
 	c.RUnlock()
@@ -72,15 +73,39 @@ func (c *VersionCache) Setter(key string) func(interface{}) {
 		o = &object{}
 		c.objects[key] = o
 		o.Lock()
+
+		objectChan := make(chan interface{}, 1)
+
+		go func() {
+			defer o.Unlock()
+			select {
+			case value := <-objectChan:
+				o.value = value
+			case <-ctx.Done():
+				break
+			}
+		}()
+
 		return func(value interface{}) {
-			o.value = value
-			o.Unlock()
+			objectChan <- value
 		}
 	}
 
 	o.Lock()
+
+	objectChan := make(chan interface{}, 1)
+
+	go func() {
+		defer o.Unlock()
+		select {
+		case value := <-objectChan:
+			o.value = value
+		case <-ctx.Done():
+			break
+		}
+	}()
+
 	return func(value interface{}) {
-		o.value = value
-		o.Unlock()
+		objectChan <- value
 	}
 }

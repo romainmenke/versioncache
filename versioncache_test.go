@@ -1,6 +1,7 @@
 package versioncache_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ func TestWillSet(t *testing.T) {
 
 	key := fmt.Sprintf("%v", time.Now())
 
-	set := c.Setter(key)
+	set := c.Setter(context.Background(), key)
 
 	go func() {
 		res := c.Get(key)
@@ -96,12 +97,38 @@ func TestWillSet(t *testing.T) {
 	set(int(2))
 }
 
+func TestWillSetCancel(t *testing.T) {
+	c := versioncache.New()
+
+	key := fmt.Sprintf("%v", time.Now())
+	c.Set(key, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	set := c.Setter(ctx, key)
+
+	go func() {
+		res := c.Get(key)
+		if v, ok := res.(int); ok && v == 1 {
+			// success
+			return
+		}
+
+		t.Fatalf("expected : 1, got : %v", res)
+	}()
+
+	time.Sleep(time.Millisecond * 100)
+
+	cancel()
+
+	set(int(2))
+}
+
 func TestWillSetB(t *testing.T) {
 	c := versioncache.New()
 
 	key := fmt.Sprintf("%v", time.Now())
 
-	set := c.Setter(key)
+	set := c.Setter(context.Background(), key)
 
 	go func() {
 		res := c.Get(key)
@@ -129,7 +156,7 @@ func TestWillSetC(t *testing.T) {
 
 	c.Set(key, 1)
 
-	set := c.Setter(key)
+	set := c.Setter(context.Background(), key)
 
 	go func() {
 		res := c.Get(key)
@@ -151,7 +178,7 @@ func TestWillSetWithVersion(t *testing.T) {
 
 	key := fmt.Sprintf("%v", time.Now())
 
-	set := c.Setter(key)
+	set := c.Setter(context.Background(), key)
 
 	go func() {
 		res := c.Get(key)
