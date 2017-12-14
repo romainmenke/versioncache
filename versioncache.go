@@ -3,6 +3,7 @@ package versioncache
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 type VersionCache struct {
@@ -68,44 +69,38 @@ func (c *VersionCache) Setter(ctx context.Context, key string) func(interface{})
 
 	if !ok {
 		c.Lock()
-		defer c.Unlock()
-
 		o = &object{}
 		c.objects[key] = o
-		o.Lock()
-
-		objectChan := make(chan interface{}, 1)
-
-		go func() {
-			defer o.Unlock()
-			select {
-			case value := <-objectChan:
-				o.value = value
-			case <-ctx.Done():
-				break
-			}
-		}()
-
-		return func(value interface{}) {
-			objectChan <- value
-		}
+		c.Unlock()
 	}
 
 	o.Lock()
 
+	var receivedValue uint64
 	objectChan := make(chan interface{}, 1)
 
 	go func() {
 		defer o.Unlock()
-		select {
-		case value := <-objectChan:
-			o.value = value
-		case <-ctx.Done():
-			break
+		defer close(objectChan)
+		defer atomic.AddUint64(&receivedValue, 1)
+
+		for {
+			select {
+			case value := <-objectChan:
+				o.value = value
+				return
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
 	return func(value interface{}) {
+		if atomic.LoadUint64(&receivedValue) > 0 {
+			return
+		}
+
+		atomic.AddUint64(&receivedValue, 1)
 		objectChan <- value
 	}
 }

@@ -82,7 +82,10 @@ func TestWillSet(t *testing.T) {
 
 	set := c.Setter(context.Background(), key)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		res := c.Get(key)
 		if v, ok := res.(int); ok && v == 2 {
 			// success
@@ -95,6 +98,8 @@ func TestWillSet(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	set(int(2))
+
+	wg.Wait()
 }
 
 func TestWillSetCancel(t *testing.T) {
@@ -106,7 +111,10 @@ func TestWillSetCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	set := c.Setter(ctx, key)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		res := c.Get(key)
 		if v, ok := res.(int); ok && v == 1 {
 			// success
@@ -116,11 +124,14 @@ func TestWillSetCancel(t *testing.T) {
 		t.Fatalf("expected : 1, got : %v", res)
 	}()
 
-	time.Sleep(time.Millisecond * 100)
-
 	cancel()
 
+	time.Sleep(time.Millisecond * 5)
+
 	set(int(2))
+
+	wg.Wait()
+
 }
 
 func TestWillSetB(t *testing.T) {
@@ -130,7 +141,10 @@ func TestWillSetB(t *testing.T) {
 
 	set := c.Setter(context.Background(), key)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		res := c.Get(key)
 		if v, ok := res.(int); ok && v == 2 {
 			// success
@@ -142,11 +156,17 @@ func TestWillSetB(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	go c.Set(key, 1)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Set(key, 1)
+	}()
 
 	time.Sleep(time.Millisecond * 100)
 
 	set(int(2))
+
+	wg.Wait()
 }
 
 func TestWillSetC(t *testing.T) {
@@ -158,7 +178,10 @@ func TestWillSetC(t *testing.T) {
 
 	set := c.Setter(context.Background(), key)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		res := c.Get(key)
 		if v, ok := res.(int); ok && v == 2 {
 			// success
@@ -171,6 +194,29 @@ func TestWillSetC(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	set(int(2))
+
+	wg.Wait()
+}
+
+func TestWillSetD(t *testing.T) {
+	c := versioncache.New()
+
+	key := fmt.Sprintf("%v", time.Now())
+
+	c.Set(key, 1)
+
+	set := c.Setter(context.Background(), key)
+
+	set(int(2))
+	set(int(3))
+
+	res := c.Get(key)
+	if v, ok := res.(int); ok && v == 2 {
+		// success
+		return
+	}
+
+	t.Fatalf("expected : 2, got : %v", res)
 }
 
 func TestWillSetWithVersion(t *testing.T) {
@@ -180,7 +226,10 @@ func TestWillSetWithVersion(t *testing.T) {
 
 	set := c.Setter(context.Background(), key)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		res := c.Get(key)
 		if v, ok := res.(int); ok && v == 2 {
 			// success
@@ -201,4 +250,5 @@ func TestWillSetWithVersion(t *testing.T) {
 		t.Fatalf("expected : nil, got : %v", res)
 	}
 
+	wg.Wait()
 }
